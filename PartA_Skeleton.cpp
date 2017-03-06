@@ -32,15 +32,15 @@ void filter() {
   maskY[1][0] = 0; maskY[1][1] = 0; maskY[1][2] = 0;
   maskY[2][0] = -1; maskY[2][1] = -2; maskY[2][2] = -1;
 
+  int ID = omp_get_thread_num();
+  int startPoint = -1;
+
   #pragma omp paraller
   #pragma omp for
   for (int x = 0; x < image_height; ++x) {
-    // int ID = omp_get_thread_num();
-    // std::map<int,int>::iterator it = first.find(ID);
-    // if(it != first.end()) {
-    //   first.insert(std::make_pair(ID, x));
-    // }
-    // std::cout << ID << " " << x << std::endl;s
+    if(startPoint == -1) {
+      startPoint = x;
+    }
     for (int y = 0; y < image_width; ++y) {
       int sumx = 0;
       int sumy = 0;
@@ -75,22 +75,16 @@ void filter() {
     }
   }
 
+  printf("Thread %d -> starting at %d \n", ID, startPoint);
 }
 
 
 void compute_sobel_static()
 {
-
   #pragma omp parallel
   {
       filter();
-      // std::map<int, int>::iterator it = first.begin();
-      // while(it != first.end()) {
-      //   std::cout << it->first << std::endl;
-      //   ++it;
-      // }
   }
-
 }
 void compute_sobel_dynamic()
 {
