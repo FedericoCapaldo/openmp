@@ -80,6 +80,7 @@ void filter() {
 
 void compute_sobel_static()
 {
+  // omp_set_num_threads(10);
   #pragma omp parallel
   {
       filter();
