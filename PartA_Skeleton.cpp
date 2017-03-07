@@ -21,8 +21,10 @@ int maskX[3][3];
 int maskY[3][3];
 int maxChunk;
 int total;
+const int THREAD_NUMBER = 8;
+
 /* ****************Change and add functions below ***************** */
-void filter() {
+void filterDynamic() {
   /* 3x3 Sobel mask for X Dimension. */
   maskX[0][0] = -1; maskX[0][1] = 0; maskX[0][2] = 1;
   maskX[1][0] = -2; maskX[1][1] = 0; maskX[1][2] = 2;
@@ -34,10 +36,12 @@ void filter() {
 
   int ID = omp_get_thread_num();
   int startPoint = -1;
+  int counter = 0;
 
-  #pragma omp paraller
-  #pragma omp for schedule(static, chunkSize)
+
+  #pragma omp for schedule(dynamic, chunkSize)
   for (int x = 0; x < image_height; ++x) {
+    ++counter;
     if(startPoint == -1) {
       startPoint = x;
     }
@@ -73,90 +77,89 @@ void filter() {
 
       outputImage[x][y] = sum;
     }
-  }
 
-  printf("Thread %d -> starting at %d \n", ID, startPoint);
+  } //end of omp for loop
+  if (startPoint == -1) {
+    printf("Thread %d -> did not process any part of the image this time.\n", ID);
+  } else {
+    printf("Thread %d -> starting at %d. Total iterations for this thread: %d\n", ID, startPoint, counter);
+  }
 }
+
+void filterStatic() {
+  /* 3x3 Sobel mask for X Dimension. */
+  maskX[0][0] = -1; maskX[0][1] = 0; maskX[0][2] = 1;
+  maskX[1][0] = -2; maskX[1][1] = 0; maskX[1][2] = 2;
+  maskX[2][0] = -1; maskX[2][1] = 0; maskX[2][2] = 1;
+  /* 3x3 Sobel mask for Y Dimension. */
+  maskY[0][0] = 1; maskY[0][1] = 2; maskY[0][2] = 1;
+  maskY[1][0] = 0; maskY[1][1] = 0; maskY[1][2] = 0;
+  maskY[2][0] = -1; maskY[2][1] = -2; maskY[2][2] = -1;
+
+  int ID = omp_get_thread_num();
+  int startPoint = -1;
+  int counter = 0;
+
+
+  #pragma omp for schedule(static, chunkSize)
+  for (int x = 0; x < image_height; ++x) {
+    ++counter;
+    if(startPoint == -1) {
+      startPoint = x;
+    }
+    for (int y = 0; y < image_width; ++y) {
+      int sumx = 0;
+      int sumy = 0;
+      int sum = 0;
+
+      if(x == 0 || x == (image_height -1) || y == 0 || y == (image_width -1)) {
+        sum = 0;
+      } else {
+        /* Gradient calculation in X Dimension */
+        for (int i=-1; i <= 1; i++) {
+          for (int j = -1; j <= 1; j++) {
+            sumx += inputImage[x+i][y+j] * maskX[i+1][j+1];
+          }
+        }
+
+        /* Gradient calculation in Y Dimension */
+        for (int i=-1; i <= 1; i++) {
+          for (int j = -1; j <= 1; j++) {
+            sumy += inputImage[x+i][y+j] * maskY[i+1][j+1];
+          }
+        }
+        sum = abs(sumx) + abs(sumy);
+      }
+
+      if (sum < 0) {
+        sum = 0;
+      } else if (sum > 255) {
+        sum = 255;
+      }
+
+      outputImage[x][y] = sum;
+    }
+
+  } //end of omp for loop
+  printf("Thread %d -> starting at %d. Total iterations for this thread: %d\n", ID, startPoint, counter);
+}
+
 
 void compute_sobel_static()
 {
-  // omp_set_num_threads(10);
+  omp_set_num_threads(THREAD_NUMBER);
   #pragma omp parallel
   {
-      filter();
+      filterStatic();
   }
 }
 
-
-void filterDyn() {
-
-}
-
-
 void compute_sobel_dynamic()
 {
-  omp_set_num_threads(4);
+  omp_set_num_threads(THREAD_NUMBER);
   #pragma omp parallel
   {
-    /* 3x3 Sobel mask for X Dimension. */
-    maskX[0][0] = -1; maskX[0][1] = 0; maskX[0][2] = 1;
-    maskX[1][0] = -2; maskX[1][1] = 0; maskX[1][2] = 2;
-    maskX[2][0] = -1; maskX[2][1] = 0; maskX[2][2] = 1;
-    /* 3x3 Sobel mask for Y Dimension. */
-    maskY[0][0] = 1; maskY[0][1] = 2; maskY[0][2] = 1;
-    maskY[1][0] = 0; maskY[1][1] = 0; maskY[1][2] = 0;
-    maskY[2][0] = -1; maskY[2][1] = -2; maskY[2][2] = -1;
-
-    int ID = omp_get_thread_num();
-    int startPoint = -1;
-    int counter = 0;
-
-    #pragma omp for schedule(dynamic, chunkSize)
-    for (int x = 0; x < image_height; ++x) {
-      ++counter;
-      if(startPoint == -1 || ((startPoint-x) >= chunkSize )) {
-        startPoint = x;
-      }
-      for (int y = 0; y < image_width; ++y) {
-        int sumx = 0;
-        int sumy = 0;
-        int sum = 0;
-
-        if(x == 0 || x == (image_height -1) || y == 0 || y == (image_width -1)) {
-          sum = 0;
-        } else {
-          /* Gradient calculation in X Dimension */
-          for (int i=-1; i <= 1; i++) {
-            for (int j = -1; j <= 1; j++) {
-              sumx += inputImage[x+i][y+j] * maskX[i+1][j+1];
-            }
-          }
-
-          /* Gradient calculation in Y Dimension */
-          for (int i=-1; i <= 1; i++) {
-            for (int j = -1; j <= 1; j++) {
-              sumy += inputImage[x+i][y+j] * maskY[i+1][j+1];
-            }
-          }
-          sum = abs(sumx) + abs(sumy);
-        }
-
-        if (sum < 0) {
-          sum = 0;
-        } else if (sum > 255) {
-          sum = 255;
-        }
-
-        outputImage[x][y] = sum;
-      }
-
-
-      if(x == (image_height-1)) {
-        printf("thread %d last iteration n %d\n", ID, x );
-      }
-
-    } //end of omp for loop
-    printf("Thread %d -> starting at %d. Counter: %d\n", ID, startPoint, counter);
+    filterDynamic();
   }
 }
 
