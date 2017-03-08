@@ -21,7 +21,7 @@ int maskX[3][3];
 int maskY[3][3];
 int maxChunk;
 int total;
-const int THREAD_NUMBER = 4;
+const int THREAD_NUMBER = 8;
 int* threadNperIteration;
 
 
@@ -174,7 +174,6 @@ void compute_sobel_dynamic()
   {
     filterDynamic();
   }
-
   printStats();
 }
 
@@ -270,10 +269,12 @@ int main(int argc, char* argv[])
         double dtime_static = omp_get_wtime();
         compute_sobel_static();
         dtime_static = omp_get_wtime() - dtime_static;
+        printf("%4.4f\n", dtime_static);
     } else {
         double dtime_dyn = omp_get_wtime();
         compute_sobel_dynamic();
         dtime_dyn = omp_get_wtime() - dtime_dyn;
+        printf("%4.4f\n", dtime_dyn );
     }
 
     /* ********Start writing output to your file************ */
