@@ -21,7 +21,10 @@ int maskX[3][3];
 int maskY[3][3];
 int maxChunk;
 int total;
-const int THREAD_NUMBER = 8;
+const int THREAD_NUMBER = 4;
+int* threadNperIteration;
+
+
 
 /* ****************Change and add functions below ***************** */
 void filterDynamic() {
@@ -35,16 +38,14 @@ void filterDynamic() {
   maskY[2][0] = -1; maskY[2][1] = -2; maskY[2][2] = -1;
 
   int ID = omp_get_thread_num();
-  int startPoint = -1;
-  int counter = 0;
-
+  int iterationCounterForThread = 0;
 
   #pragma omp for schedule(dynamic, chunkSize)
   for (int x = 0; x < image_height; ++x) {
-    ++counter;
-    if(startPoint == -1) {
-      startPoint = x;
-    }
+    ++iterationCounterForThread;
+    // stats to print beginning process
+    threadNperIteration[x] = omp_get_thread_num();
+
     for (int y = 0; y < image_width; ++y) {
       int sumx = 0;
       int sumy = 0;
@@ -79,10 +80,12 @@ void filterDynamic() {
     }
 
   } //end of omp for loop
-  if (startPoint == -1) {
+
+
+  if (iterationCounterForThread == 0) {
     printf("Thread %d -> did not process any part of the image this time.\n", ID);
   } else {
-    printf("Thread %d -> starting at %d. Total iterations for this thread: %d\n", ID, startPoint, counter);
+    printf("Thread %d -> Total iterations for this thread: %d\n", ID, iterationCounterForThread);
   }
 }
 
@@ -97,16 +100,14 @@ void filterStatic() {
   maskY[2][0] = -1; maskY[2][1] = -2; maskY[2][2] = -1;
 
   int ID = omp_get_thread_num();
-  int startPoint = -1;
-  int counter = 0;
-
+  int iterationCounterForThread = 0;
 
   #pragma omp for schedule(static, chunkSize)
   for (int x = 0; x < image_height; ++x) {
-    ++counter;
-    if(startPoint == -1) {
-      startPoint = x;
-    }
+    ++iterationCounterForThread;
+    // stats to print beginning process
+    threadNperIteration[x] = omp_get_thread_num();
+
     for (int y = 0; y < image_width; ++y) {
       int sumx = 0;
       int sumy = 0;
@@ -141,26 +142,40 @@ void filterStatic() {
     }
 
   } //end of omp for loop
-  printf("Thread %d -> starting at %d. Total iterations for this thread: %d\n", ID, startPoint, counter);
+
+  printf("Thread %d -> Total iterations for this thread: %d\n", ID, iterationCounterForThread);
 }
 
+
+void printStats() {
+  printf("----------------------------------------------------------------\n");
+  int count = 0;
+  int limit = image_height/chunkSize;
+  for(int i=0; i< limit; ++i) {
+    printf("Thread %d -> starting at %d. \n", threadNperIteration[i*chunkSize], count);
+    count += chunkSize;
+  }
+}
 
 void compute_sobel_static()
 {
   omp_set_num_threads(THREAD_NUMBER);
-  #pragma omp parallel
+  #pragma omp parallel shared(threadNperIteration)
   {
       filterStatic();
   }
+  printStats();
 }
 
 void compute_sobel_dynamic()
 {
   omp_set_num_threads(THREAD_NUMBER);
-  #pragma omp parallel
+  #pragma omp parallel shared(threadNperIteration)
   {
     filterDynamic();
   }
+
+  printStats();
 }
 
 
@@ -244,6 +259,9 @@ int main(int argc, char* argv[])
             continue;
         }
     }
+
+    // keep track of values to then retrieve beginning of each thread
+    threadNperIteration = new int[image_height];
 
     /************ Call functions to process image *********/
     std::string opt = argv[4];
